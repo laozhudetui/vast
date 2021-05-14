@@ -55,7 +55,9 @@ struct active_partition_state {
   /// stored. Currently, only the "global" type is supported.
   enum class store_type {
     invalid,
-    global,
+    global_segments, // The legacy global segment store.
+    local_segments,  // A partition-local
+    // mms_table_slices, // TODO: Implement this, zero-deserialization store.
   };
 
   // -- utility functions ------------------------------------------------------
