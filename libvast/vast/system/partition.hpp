@@ -51,6 +51,13 @@ struct active_partition_state {
     caf::broadcast_downstream_manager<
       table_slice_column, vast::qualified_record_field, partition_selector>>;
 
+  /// The kind of store where the table slices index by this partition are
+  /// stored. Currently, only the "global" type is supported.
+  enum class store_type {
+    invalid,
+    global,
+  };
+
   // -- utility functions ------------------------------------------------------
 
   active_indexer_actor indexer_at(size_t position) const;

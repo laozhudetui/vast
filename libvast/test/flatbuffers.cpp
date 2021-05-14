@@ -147,6 +147,9 @@ TEST(empty partition roundtrip) {
   REQUIRE_EQUAL(partition->partition_type(),
                 vast::fbs::partition::Partition::v0);
   auto partition_v0 = partition->partition_as_v0();
+  REQUIRE(partition_v0->store());
+  REQUIRE(partition_v0->store()->id());
+  REQUIRE_EQUAL(partition_v0->store()->id()->str(), "global");
   REQUIRE(partition_v0);
   auto error = unpack(*partition_v0, recovered_state);
   CHECK(!error);

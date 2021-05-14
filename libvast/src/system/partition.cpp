@@ -272,6 +272,11 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   auto maybe_ps = pack(builder, *x.synopsis);
   if (!maybe_ps)
     return maybe_ps.error();
+  // Currently only the 'global' store is supported.
+  auto name = builder.CreateString("global");
+  fbs::partition::store_header::v0Builder store_builder(builder);
+  store_builder.add_id(name);
+  auto store_header = store_builder.Finish();
   fbs::partition::v0Builder v0_builder(builder);
   v0_builder.add_uuid(*uuid);
   v0_builder.add_offset(x.offset);
@@ -280,6 +285,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   v0_builder.add_partition_synopsis(*maybe_ps);
   v0_builder.add_combined_layout(*combined_layout);
   v0_builder.add_type_ids(type_ids);
+  v0_builder.add_store(store_header);
   auto partition_v0 = v0_builder.Finish();
   fbs::PartitionBuilder partition_builder(builder);
   partition_builder.add_partition_type(fbs::partition::Partition::v0);
@@ -288,6 +294,18 @@ pack(flatbuffers::FlatBufferBuilder& builder, const active_partition_state& x) {
   fbs::FinishPartitionBuffer(builder, partition);
   return partition;
 }
+
+namespace {
+
+active_partition_state::store_type
+store_id_from_string(const std::string& str) {
+  if (str == "global")
+    return active_partition_state::store_type::global;
+  else
+    return active_partition_state::store_type::invalid;
+}
+
+} // namespace
 
 caf::error
 unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
@@ -301,6 +319,13 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
     return caf::make_error(ec::format_error,
                            "missing 'layouts' field in partition "
                            "flatbuffer");
+  auto store_header = partition.store();
+  // If no store_id is set, assume "global" for backwards compatibility.
+  auto store_id = store_header ? store_id_from_string(store_header->id()->str())
+                               : store_id_from_string("global");
+  if (store_id != active_partition_state::store_type::global)
+    return caf::make_error(ec::format_error, "invalid 'store.id' in partition "
+                                             "flatbuffer");
   auto indexes = partition.indexes();
   if (!indexes)
     return caf::make_error(ec::format_error,
