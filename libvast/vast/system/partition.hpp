@@ -183,6 +183,9 @@ struct passive_partition_state {
   /// The number of events in the partition.
   size_t events;
 
+  /// The store type as found in the flatbuffer.
+  active_partition_state::store_type store_type;
+
   /// The raw memory of the partition, used to spawn indexers on demand.
   chunk_ptr partition_chunk;
 

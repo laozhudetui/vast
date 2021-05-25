@@ -26,6 +26,8 @@ struct passive_store_state {
   chunk_ptr data;
 };
 
+std::filesystem::path store_path_for_partition(const vast::uuid&);
+
 store_builder_actor::behavior_type
 active_local_store(store_builder_actor::stateful_pointer<active_store_state>,
                    filesystem_actor filesystem,

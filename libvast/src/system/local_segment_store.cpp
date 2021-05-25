@@ -6,21 +6,28 @@
 // SPDX-FileCopyrightText: (c) 2021 The VAST Contributors
 // SPDX-License-Identifier: BSD-3-Clause
 
+#include "vast/system/local_segment_store.hpp"
+
 #include "vast/ids.hpp"
 #include "vast/logger.hpp"
 #include "vast/query.hpp"
 #include "vast/segment_store.hpp"
-#include "vast/system/partition_local_store.hpp"
 #include "vast/table_slice.hpp"
 
 #include <caf/settings.hpp>
+#include <fmt/format.h>
 
 #include <vector>
 
 namespace vast::system {
 
+std::filesystem::path store_path_for_partition(const uuid& partition_id) {
+  auto store_filename = fmt::format("{}.store", partition_id);
+  return std::filesystem::path{"archive"} / store_filename;
+}
+
 store_actor::behavior_type passive_local_store(
-  store_builder_actor::stateful_pointer<active_store_state> self) {
+  store_builder_actor::stateful_pointer<passive_store_state> self) {
   return {
     // store
     [self](query, ids) -> atom::done {
@@ -39,7 +46,9 @@ store_builder_actor::behavior_type active_local_store(
     [self](query, ids) -> atom::done {
       return atom::done_v;
     },
-    [self](atom::erase, ids) -> atom::done {
+    [self](atom::erase, const ids& ids) -> caf::result<atom::done> {
+      if (auto result = self->state.store->erase(ids); !result)
+        return result;
       return atom::done_v;
     },
     // store builder

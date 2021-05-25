@@ -42,6 +42,7 @@ spawn_index(node_actor::stateful_pointer<node_state> self,
   auto handle = self->spawn(
     index, static_cast<store_actor>(archive), filesystem, indexdir,
     // TODO: Pass these options as a vast::data object instead.
+    opt("vast.partition-local-stores", sd::partition_local_stores),
     opt("vast.max-partition-size", sd::max_partition_size),
     opt("vast.max-resident-partitions", sd::max_in_mem_partitions),
     opt("vast.max-taste-partitions", sd::taste_partitions),

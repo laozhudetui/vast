@@ -319,6 +319,7 @@ void index_state::create_active_partition() {
   auto id = uuid::random();
   caf::settings index_opts;
   index_opts["cardinality"] = partition_capacity;
+  index_opts["partition-local-stores"] = partition_local_stores;
   // These options must be kept in sync with vast/address_synopsis.hpp and
   // vast/string_synopsis.hpp respectively.
   auto synopsis_options = caf::settings{};
@@ -591,10 +592,10 @@ void index_state::flush_to_disk() {
 }
 
 index_actor::behavior_type
-index(index_actor::stateful_pointer<index_state> self, store_actor store,
+index(index_actor::stateful_pointer<index_state> self, store_actor global_store,
       filesystem_actor filesystem, const std::filesystem::path& dir,
-      size_t partition_capacity, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t num_workers,
+      bool partition_local_stores, size_t partition_capacity,
+      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double meta_index_fp_rate) {
   VAST_TRACE_SCOPE("{} {} {} {} {} {} {}", VAST_ARG(filesystem), VAST_ARG(dir),
                    VAST_ARG(partition_capacity), VAST_ARG(max_inmem_partitions),
@@ -608,13 +609,14 @@ index(index_actor::stateful_pointer<index_state> self, store_actor store,
   // Set members.
   self->state.self = self;
   self->state.accept_queries = true;
-  self->state.store = std::move(store);
+  self->state.store = std::move(global_store);
   self->state.filesystem = std::move(filesystem);
   self->state.meta_index = self->spawn<caf::lazy_init>(meta_index);
   self->state.dir = dir;
   self->state.synopsisdir = meta_index_dir;
   self->state.partition_capacity = partition_capacity;
   self->state.taste_partitions = taste_partitions;
+  self->state.partition_local_stores = partition_local_stores;
   self->state.inmem_partitions.factory().filesystem() = self->state.filesystem;
   self->state.inmem_partitions.resize(max_inmem_partitions);
   self->state.meta_index_fp_rate = meta_index_fp_rate;

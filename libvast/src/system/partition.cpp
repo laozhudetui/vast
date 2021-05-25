@@ -30,6 +30,7 @@
 #include "vast/qualified_record_field.hpp"
 #include "vast/synopsis.hpp"
 #include "vast/system/indexer.hpp"
+#include "vast/system/local_segment_store.hpp"
 #include "vast/system/shutdown.hpp"
 #include "vast/system/status_verbosity.hpp"
 #include "vast/system/terminate.hpp"
@@ -300,7 +301,9 @@ namespace {
 active_partition_state::store_type
 store_id_from_string(const std::string& str) {
   if (str == "global")
-    return active_partition_state::store_type::global;
+    return active_partition_state::store_type::global_segments;
+  else if (str == "local")
+    return active_partition_state::store_type::local_segments;
   else
     return active_partition_state::store_type::invalid;
 }
@@ -323,9 +326,9 @@ unpack(const fbs::partition::v0& partition, passive_partition_state& state) {
   // If no store_id is set, assume "global" for backwards compatibility.
   auto store_id = store_header ? store_id_from_string(store_header->id()->str())
                                : store_id_from_string("global");
-  if (store_id != active_partition_state::store_type::global)
-    return caf::make_error(ec::format_error, "invalid 'store.id' in partition "
-                                             "flatbuffer");
+  if (store_id == active_partition_state::store_type::invalid)
+    return caf::make_error(ec::format_error, "found unknown store id in "
+                                             "partition");
   auto indexes = partition.indexes();
   if (!indexes)
     return caf::make_error(ec::format_error,
@@ -392,18 +395,28 @@ caf::error unpack(const fbs::partition::v0& x, partition_synopsis& ps) {
 active_partition_actor::behavior_type active_partition(
   active_partition_actor::stateful_pointer<active_partition_state> self,
   uuid id, filesystem_actor filesystem, caf::settings index_opts,
-  caf::settings synopsis_opts, store_actor store) {
+  caf::settings synopsis_opts, store_actor global_store) {
   self->state.self = self;
   self->state.name = "partition-" + to_string(id);
   self->state.id = id;
   self->state.offset = invalid_id;
   self->state.events = 0;
   self->state.filesystem = std::move(filesystem);
-  self->state.store = std::move(store);
   self->state.streaming_initiated = false;
   self->state.synopsis = std::make_shared<partition_synopsis>();
   self->state.synopsis_opts = std::move(synopsis_opts);
   put(self->state.synopsis_opts, "buffer-input-data", true);
+  auto local = get_or(index_opts, "partition-local-stores",
+                      defaults::system::partition_local_stores);
+  if (!local)
+    self->state.store = std::move(global_store);
+  else
+    self->state.store = self->spawn(active_local_store, filesystem,
+                                    store_path_for_partition(id));
+  if (!self->state.store) {
+    VAST_ERROR("partition {} could not spawn local store", self->state.id);
+    return active_partition_actor::behavior_type::make_empty_behavior();
+  }
   // The active partition stage is a caf stream stage that takes
   // a stream of `table_slice` as input and produces several
   // streams of `table_slice_column` as output.
@@ -731,9 +744,8 @@ active_partition_actor::behavior_type active_partition(
 partition_actor::behavior_type passive_partition(
   partition_actor::stateful_pointer<passive_partition_state> self, uuid id,
   filesystem_actor filesystem, const std::filesystem::path& path,
-  store_actor store) {
+  store_actor global_store) {
   self->state.self = self;
-  self->state.store = std::move(store);
   self->set_exit_handler([=](const caf::exit_msg& msg) {
     VAST_DEBUG("{} received EXIT from {} with reason: {}", self, msg.source,
                msg.reason);
@@ -805,6 +817,24 @@ partition_actor::behavior_type passive_partition(
         if (auto error = unpack(*self->state.flatbuffer, self->state)) {
           VAST_ERROR("{} failed to unpack partition: {}", self, render(error));
           self->quit(std::move(error));
+          return;
+        }
+        switch (self->state.store_type) {
+          case active_partition_state::store_type::global_segments:
+            self->state.store = global_store;
+            break;
+          case active_partition_state::store_type::local_segments:
+            self->state.store = self->spawn(passive_local_store, filesystem,
+                                            store_path_for_partition(id));
+          default:
+            // Getting here is a bug; `unpack()` should have returned an error
+            // when we see a store type we don't understand.
+            VAST_ASSERT(false, "encountered unhandled story type");
+        }
+        if (!self->state.store) {
+          VAST_ERROR("{} failed to spawn store", self);
+          self->quit(caf::make_error(ec::system_error, "failed to spawn "
+                                                       "store"));
           return;
         }
         if (id != self->state.id)

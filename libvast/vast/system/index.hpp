@@ -199,6 +199,9 @@ struct index_state {
   /// from disk.
   bool accept_queries = {};
 
+  /// Whether we should use a partition-local store for the active partition.
+  bool partition_local_stores = {};
+
   /// The maximum number of events that a partition can hold.
   size_t partition_capacity = {};
 
@@ -261,6 +264,7 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 /// @param filesystem The filesystem actor. Not used by the index itself but
 /// forwarded to partitions.
 /// @param dir The directory of the index.
+/// @param partition_local_stores Whether to use a global store for segments.
 /// @param partition_capacity The maximum number of events per partition.
 /// @param taste_partitions How many lookup partitions to schedule immediately.
 /// @param num_workers The maximum amount of concurrent lookups.
@@ -269,8 +273,8 @@ pack(flatbuffers::FlatBufferBuilder& builder, const index_state& state);
 index_actor::behavior_type
 index(index_actor::stateful_pointer<index_state> self, store_actor store,
       filesystem_actor filesystem, const std::filesystem::path& dir,
-      size_t partition_capacity, size_t max_inmem_partitions,
-      size_t taste_partitions, size_t num_workers,
+      bool partition_local_stores, size_t partition_capacity,
+      size_t max_inmem_partitions, size_t taste_partitions, size_t num_workers,
       const std::filesystem::path& meta_index_dir, double meta_index_fp_rate);
 
 } // namespace vast::system
