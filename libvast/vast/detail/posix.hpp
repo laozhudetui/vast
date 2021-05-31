@@ -8,7 +8,11 @@
 
 #pragma once
 
+#include "vast/span.hpp"
+
 #include <caf/fwd.hpp>
+#include <sys/socket.h>
+#include <sys/un.h>
 
 #include <string>
 
@@ -17,6 +21,15 @@
 namespace vast::detail {
 
 enum class socket_type { datagram, stream, fd };
+
+struct uds_conn {
+  int socket_fd;
+  ::sockaddr_un srv;
+
+  static caf::expected<uds_conn> make(const std::string& path);
+
+  caf::error send(span<char> data);
+};
 
 /// Constructs a UNIX domain socket.
 /// @param path The file system path where to construct the socket.
@@ -71,8 +84,8 @@ struct [[nodiscard]] unix_domain_socket {
   /// @param path The filesystem path identifying the server socket.
   /// @param type The socket type.
   /// @returns A UNIX domain socket handle.
-  static unix_domain_socket connect(const std::string& path,
-                                    socket_type type = socket_type::stream);
+  static unix_domain_socket
+  connect(const std::string& path, socket_type type = socket_type::stream);
 
   /// Checks whether the UNIX domain socket is in working state.
   /// @returns `true` if the UNIX domain socket is open and operable.

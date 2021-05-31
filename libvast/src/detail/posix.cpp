@@ -60,6 +60,45 @@ int uds_accept(int socket) {
   return fd;
 }
 
+static int uds_dgram_client(const std::string& path) {
+  auto fd = ::socket(AF_UNIX, SOCK_DGRAM, 0);
+  if (fd < 0)
+    return fd;
+  ::sockaddr_un clt = {};
+  std::memset(&clt, 0, sizeof(clt));
+  clt.sun_family = AF_UNIX;
+  auto client_path = path + "-client";
+  std::strncpy(clt.sun_path, client_path.data(), sizeof(clt.sun_path) - 1);
+  ::unlink(client_path.c_str()); // Always remove previous socket file.
+  if (::bind(fd, reinterpret_cast<sockaddr*>(&clt), sizeof(clt)) < 0) {
+    VAST_WARN("{} failed in bind: {}", __func__, ::strerror(errno));
+    return -1;
+  }
+  return fd;
+}
+
+caf::expected<uds_conn> uds_conn::make(const std::string& path) {
+  auto fd = uds_dgram_client(path);
+  if (fd < 0)
+    return caf::make_error(ec::system_error, "failed to bind client socket: {}",
+                           ::strerror(errno));
+  auto result = uds_conn{};
+  result.socket_fd = fd;
+  std::memset(&result.srv, 0, sizeof(srv));
+  result.srv.sun_family = AF_UNIX;
+  std::strncpy(result.srv.sun_path, path.data(),
+               sizeof(result.srv.sun_path) - 1);
+  return result;
+}
+
+caf::error uds_conn::send(span<char> data) {
+  if (::sendto(socket_fd, data.data(), data.size(), 0,
+               reinterpret_cast<sockaddr*>(&srv), sizeof(struct sockaddr_un))
+      < 0)
+    return caf::make_error(ec::system_error, "::sendto: {}", ::strerror(errno));
+  return caf::none;
+}
+
 VAST_DIAGNOSTIC_PUSH
 #if VAST_GCC
 #  pragma GCC diagnostic ignored "-Wmaybe-uninitialized"
