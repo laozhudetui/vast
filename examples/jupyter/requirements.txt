@@ -6,3 +6,4 @@ numpy>=1.18
 pandas>=1.0
 pyarrow>=0.17
 scipy>=1.4.1
+setuptools>=65.5.1 # not directly required, pinned by Snyk to avoid a vulnerability
