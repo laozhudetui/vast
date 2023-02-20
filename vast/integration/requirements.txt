@@ -3,3 +3,4 @@ jsondiff>=1.2.0
 pyyaml>=4.2b1
 schema==0.6.8
 pyarrow>=0.17
+numpy>=1.22.2 # not directly required, pinned by Snyk to avoid a vulnerability
