@@ -6,3 +6,5 @@ numpy>=1.18
 pandas>=1.0
 pyarrow>=0.17
 scipy>=1.4.1
+fonttools>=4.61.0 # not directly required, pinned by Snyk to avoid a vulnerability
+tornado>=6.5.3 # not directly required, pinned by Snyk to avoid a vulnerability
